@@ -1,0 +1,14 @@
+# data (not distributed)
+*.csv
+*.xlsx
+# R session files
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+# outputs
+output/
+_backup/
+# OS
+.DS_Store
+Thumbs.db

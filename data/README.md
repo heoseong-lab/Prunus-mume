@@ -1,0 +1,1 @@
+Input data are not distributed with the code. Place `매실 전체 데이터.csv` and `매실_유기산_자원.csv` in the project root (one level above `R/`) before running `R/run_all.R`. See the Data Availability Statement of the manuscript.
