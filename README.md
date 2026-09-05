@@ -14,7 +14,7 @@ The pipeline evaluates 20 phenotypic traits scored on 204 *P. mume* accessions o
 | `R/01_preprocess.R` | Data curation (rare-level merging, unit correction of 2024 fruit weight, outlier listing), linear mixed models with year, accession and harvest batch, repeatability, BLUPs, prediction-error-variance reliability, accession-level matrix | 2.4 to 2.6 |
 | `R/02_diversity.R` | Descriptive statistics, Shannon-Weaver diversity, between-year correlations, categorical agreement (complete and majority agreement, Fleiss' kappa, Krippendorff's alpha), year shift and cumulative link mixed models, bias-corrected association matrix | 2.5, 2.6, 3.1 to 3.3 |
 | `R/03_multivariate.R` | Composite reliability and weights, reliability-weighted Gower distance on sqrt(1 - s), PCoA and FAMD, Ward.D2 clustering with silhouette scan, eight sensitivity configurations with ARI, nominal-coding permutations, core collection by maximum dissimilarity with MD/VD/CR/VR | 2.7 to 2.9, 3.4 to 3.6 |
-| `R/04_organic_acid.R` | Organic acid ANOVA (Bartlett, Welch), five-class grading against LSD, Tukey HSD for extremes, compositional types, correlations with phenotypic traits, Benjamini-Hochberg correction and TOST equivalence tests, selection lists | 2.10, 3.7, 3.8 |
+| `R/04_organic_acid.R` | Organic acid ANOVA (Bartlett, Welch), five-class grading against LSD, Tukey HSD for extremes, compositional types, correlations among the organic acids on absolute contents, selection lists | 2.10, 3.7, 3.8 |
 | `R/run_all.R` | Runs the five scripts in order | |
 
 `mermaid/Fig2_analysis_pipeline_EN.mermaid` is the source of Figure 2 (analytical pipeline). `R/README_pipeline_ko.md` is a detailed Korean description of the pipeline, the analytical decisions and their rationale.

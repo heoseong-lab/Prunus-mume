@@ -31,7 +31,7 @@ ALPHA     <- 0.05
 #   평균·SD·분위수·최소·최대·LSD·HSD·SE·신뢰구간 : x OA_SCALE     (1차 동차)
 #   평균제곱 MS                                   : x OA_SCALE^2   (2차 동차)
 #   F·p·Bartlett·Welch·CV%·RSD%·왜도·첨도·상관·
-#   구성비(%)·구연산/사과산 비·Shapiro p·TOST p   : 척도 불변 — 손대지 않는다
+#   구성비(%)·구연산/사과산 비·Shapiro p          : 척도 불변 — 손대지 않는다
 # (Shapiro-Wilk 은 위치·척도 불변이고, log 변환은 상수 log(100) 만큼의
 #  평행이동이므로 정규성 진단 결과도 바뀌지 않는다.)
 OA_SCALE    <- 1 / 100
@@ -336,109 +336,21 @@ comp |>
   mutate(r_abs_malic_citric = cor(type_dat$malic_mean, type_dat$citric_mean)) |>
   save_tab("S5_composition_summary")
 
-## ---- S-6 표현형 그룹 간 비교 ------------------------------------------------
-# 자원 하나 = 반복 하나. S-3(개체 반복)과는 실험 단위가 다른 별개 검정.
-GROUP_VARS  <- c("fruit_shape_mode", "flower_diameter_mode", "leaf_green_intensity_mode",
-                 "flesh_color_mode", "ground_color_mode")
-TEST_VARS   <- c(ACID_MEAN, "total_acid")
-MIN_GROUP_N <- 6
+## ---- S-6 (삭제) 표현형 그룹 간 비교 ---------------------------------------
+# 유기산 함량을 표현형 등급(fruit_shape 등 5형질)별로 비교하던 ANOVA·TOST 절차와
+# 상자그림(구 Figure S9)은 원고에서 제외되어(2026-09-05) 코드에서도 삭제했다.
+# 단계 번호는 계획서와의 대응을 위해 그대로 둔다.
 
-grp_dat <- oa_use |> mutate(across(all_of(GROUP_VARS), \(x) str_remove(x, "\\*$")))
+## ---- S-7 유기산 간 상관 -----------------------------------------------------
+# 유기산 절대 함량과 파생 지표(총산, 구연산/사과산 비) 사이의 상관. 원고 Table S12 와
+# Figure 7 의 근거. 표현형 형질(TA·SSC·과중·개화기)과의 상관, BH 보정, 상관 히트맵
+# (구 Figure S8)은 원고에서 제외되어(2026-09-05) 삭제했다.
+# 구성비끼리의 상관은 폐쇄 자료라 음이 강제되므로(S-5 주석) 절대 함량으로만 계산한다.
+cor_vars <- c(ACID_MEAN, DERIVED)
 
-grp_slice <- function(g, v) {
-  grp_dat |>
-    select(g = all_of(g), y = all_of(v)) |>
-    filter(!is.na(g), is.finite(y)) |>
-    filter(n() >= MIN_GROUP_N, .by = g) |>
-    mutate(g = factor(g))
-}
-
-group_test <- expand_grid(그룹변수 = GROUP_VARS, 변수 = TEST_VARS) |>
-  mutate(res = map2(그룹변수, 변수, \(g, v) {
-    d <- grp_slice(g, v)
-    if (n_distinct(d$g) < 2) return(NULL)
-    s <- summary(aov(y ~ g, data = d))[[1]]
-    tibble(k = n_distinct(d$g), n = nrow(d), F = s[["F value"]][1],
-           p_anova = s[["Pr(>F)"]][1], KW_p = kruskal.test(y ~ g, data = d)$p.value,
-           eta2 = s[["Sum Sq"]][1] / sum(s[["Sum Sq"]]))
-  })) |>
-  filter(!map_lgl(res, is.null)) |>
-  unnest(res) |>
-  mutate(p_adj = p.adjust(p_anova, "BH"), 유의 = p_adj < ALPHA) |>
-  save_tab("S6_group_comparison")
-
-message("[04] S-6 ANOVA: 유의 ", sum(group_test$유의), " / ", nrow(group_test), " 조합")
-if (any(group_test$유의)) print(filter(group_test, 유의))
-
-## 등가성 검정 (TOST) — 비유의를 "차이 없음"으로 쓰기 위한 절차
-# 등가 한계 = Cohen's d 0.5 에 해당하는 원단위 폭
-tost_pair <- function(x, y, eps_d = 0.5) {
-  s_p <- sqrt(((length(x)-1)*var(x) + (length(y)-1)*var(y)) / (length(x)+length(y)-2))
-  eps <- eps_d * s_p
-  tibble(diff = mean(x) - mean(y), eps = eps,
-         tost_p = max(t.test(x, y, mu = -eps, alternative = "greater")$p.value,
-                      t.test(x, y, mu =  eps, alternative = "less")$p.value))
-}
-
-equiv_tab <- expand_grid(그룹변수 = GROUP_VARS, 변수 = TEST_VARS) |>
-  mutate(res = map2(그룹변수, 변수, \(g, v) {
-    d  <- grp_slice(g, v)
-    lv <- levels(droplevels(d$g))
-    if (length(lv) < 2) return(NULL)
-    combn(lv, 2, simplify = FALSE) |>
-      map(\(pr) tost_pair(d$y[d$g == pr[1]], d$y[d$g == pr[2]]) |>
-            mutate(비교 = str_c(pr, collapse = " vs "))) |>
-      list_rbind()
-  })) |>
-  filter(!map_lgl(res, is.null)) |>
-  unnest(res) |>
-  mutate(tost_p_adj = p.adjust(tost_p, "BH"),
-         등가 = tost_p < ALPHA, 등가_BH = tost_p_adj < ALPHA) |>
-  save_tab("S6_equivalence_TOST")
-
-message("[04] S-6 TOST: 등가 판정 ", sum(equiv_tab$등가), " / ", nrow(equiv_tab), " 쌍",
-        " (BH 보정 후 ", sum(equiv_tab$등가_BH), "쌍)")
-
-# ANOVA 와 TOST 를 결합한 쌍별 결론 — 콘솔 메시지로만 두지 않고 표로 남긴다.
-conclusion_tab <- equiv_tab |>
-  left_join(select(group_test, 그룹변수, 변수, p_anova, p_adj_anova = p_adj),
-            by = c("그룹변수", "변수")) |>
-  mutate(결론 = case_when(
-    p_adj_anova < ALPHA ~ "차이 있음",
-    등가                ~ "실질적으로 차이 없음 (등가)",
-    .default            = "판정 불가 (표본 부족)")) |>
-  select(그룹변수, 변수, 비교, diff, eps, p_anova, p_adj_anova, tost_p, tost_p_adj, 결론) |>
-  save_tab("S6_pairwise_conclusion")
-
-message("     쌍별 결론: ", str_c(names(table(conclusion_tab$결론)), " ",
-                                  as.integer(table(conclusion_tab$결론)), collapse = " | "))
-message("     ANOVA 비유의 + TOST 유의 = 실질적으로 차이 없음.")
-message("     둘 다 비유의면 표본이 부족한 것이지 차이가 없는 것이 아니다.")
-
-p_box <- grp_dat |>
-  select(no, all_of(GROUP_VARS), all_of(ACID_MEAN)) |>
-  pivot_longer(all_of(GROUP_VARS), names_to = "그룹변수", values_to = "수준") |>
-  pivot_longer(all_of(ACID_MEAN), names_to = "acid", values_to = "value") |>
-  filter(!is.na(수준)) |>
-  mutate(acid = relabel_acid(acid)) |>
-  ggplot(aes(수준, value)) +
-  geom_boxplot(outlier.size = .7, fill = PAL[["pale"]], colour = PAL[["green"]], linewidth = .35) +
-  facet_grid(acid ~ 그룹변수, scales = "free", labeller = labeller(acid = label_parsed)) +
-  labs(x = NULL, y = OA_LAB) +
-  theme(axis.text.x = element_text(angle = 40, hjust = 1, size = 7))
-save_fig(p_box, "S6_group_boxplot", w = 13, h = 8)
-
-## ---- S-7 형질 간 상관 -------------------------------------------------------
-cor_vars <- c(ACID_MEAN, DERIVED, "ta_mean", "ssc_mean", "fruit_weight_mean",
-              "bloom_doy_mean") |> keep(\(x) x %in% names(oa_use))
-
-# BH 보정은 고유 쌍에만 적용한다. 대각선(자기상관 p = 0)과 대칭 중복까지 넣으면
-# 검정 수가 부풀려져 보정 p 가 체계적으로 작아진다(반보수적).
 cor_pairs <- t(combn(cor_vars, 2)) |> as_tibble(.name_repair = ~ c("x", "y")) |>
   mutate(res = map2(x, y, \(a, b) {
     ok <- is.finite(oa_use[[a]]) & is.finite(oa_use[[b]])
-    if (sum(ok) < 10) return(tibble(n = sum(ok), pearson = NA_real_,
-                                    spearman = NA_real_, p = NA_real_))
     ct <- suppressWarnings(cor.test(oa_use[[a]][ok], oa_use[[b]][ok]))
     tibble(n = sum(ok), pearson = unname(ct$estimate),
            spearman = suppressWarnings(cor(oa_use[[a]][ok], oa_use[[b]][ok],
@@ -446,36 +358,12 @@ cor_pairs <- t(combn(cor_vars, 2)) |> as_tibble(.name_repair = ~ c("x", "y")) |>
            p = ct$p.value)
   })) |>
   unnest(res) |>
-  mutate(p_adj = p.adjust(p, "BH"))          # 고유 36쌍 기준
-
-message("[04] S-7 BH 보정 대상 고유 쌍 ", nrow(cor_pairs), "개")
-
-# 히트맵·표는 대칭 격자로 펼치되 보정 p 는 위에서 계산한 값을 그대로 복사한다.
-cor_long <- bind_rows(
-  cor_pairs,
-  rename(cor_pairs, x = y, y = x),
-  tibble(x = cor_vars, y = cor_vars, n = map_int(cor_vars, \(v) sum(is.finite(oa_use[[v]]))),
-         pearson = 1, spearman = 1, p = NA_real_, p_adj = NA_real_)
-) |>
-  arrange(match(x, cor_vars), match(y, cor_vars)) |>
+  arrange(desc(abs(pearson))) |>
   save_tab("S7_correlation")
 
-p_cor <- ggplot(cor_long, aes(x, y, fill = pearson)) +
-  geom_tile(colour = "white", linewidth = .4) +
-  geom_text(aes(label = if_else(x == y, "",
-                                sprintf("%.2f%s", pearson, if_else(p_adj < .05, "*", "")))),
-            size = 2.8, colour = "grey12") +
-  scale_fill_gradient2(low = PAL[["rust"]], mid = "grey96", high = PAL[["green"]],
-                       midpoint = 0, limits = c(-1, 1),
-                       name = "Pearson r\n(* BH-adjusted p < 0.05)") +
-  labs(x = NULL, y = NULL) +
-  theme(axis.text.x = element_text(angle = 40, hjust = 1), panel.grid = element_blank())
-save_fig(p_cor, "S7_correlation_heatmap", w = 8.5, h = 7.5)
-
-ta_check <- cor_long |> filter(x == "total_acid", y == "ta_mean")
-message(sprintf("[04] S-7 총산 vs titratable_acidity: r = %.3f (p = %.3f, n = %d)",
-                ta_check$pearson, ta_check$p, ta_check$n))
-message("     양(+) 상관이 아니면 두 측정의 시료·단위 정합성을 확인할 것.")
+message("[04] S-7 유기산 간 상관 ", nrow(cor_pairs), "쌍 (고유 쌍, 절대 함량 기준) | ",
+        "최소 |r| = ", sprintf("%.3f", min(abs(cor_pairs$pearson))),
+        ", 최대 p = ", format(max(cor_pairs$p), digits = 2))
 
 ## ---- S-8 목적별 선발 --------------------------------------------------------
 sel_base <- ci_tab |>
