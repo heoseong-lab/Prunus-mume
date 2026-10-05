@@ -1,13 +1,20 @@
 # data (not distributed)
+data/*
+!data/README.md
 *.csv
 *.xlsx
+# outputs
+output/
+figures_for_submission/
+# manuscript files
+manuscript/
+build/
+*.docx
 # R session files
 .Rhistory
 .RData
 .Rproj.user/
 *.Rproj
-# outputs
-output/
 _backup/
 # OS
 .DS_Store
