@@ -2,7 +2,7 @@
 
 R code for the analysis reported in:
 
-> Jang, H.S.; Heo, S. Reproducibility-Weighted Phenotypic Characterization of Japanese Apricot (*Prunus mume*) Germplasm from Multi-Year Field Records. *Horticulturae* (under review, 2026).
+> Jang, H.S.; Heo, S. Reproducibility-Weighted Phenotypic Characterization of Japanese Apricot (*Prunus mume*) Germplasm from Multi-Year Field Records. *???* (under review, 2026).
 
 The pipeline characterizes 202 *P. mume* accessions from 480 accession-year records (2024 to 2026) with a two-stage procedure. In the first stage, quantitative traits are adjusted within each year (fruit traits by harvest batch, the other traits by year). In the second stage, every variable recorded each year is weighted in a Gower distance by its between-year reproducibility: the mean between-year Spearman correlation of the adjusted values for quantitative traits and Fleiss' kappa for categorical descriptors. The weighted distance is clustered (Ward's minimum-variance method), validated by leave-one-year-out comparisons and disjoint splits of the collection, and used together with the descriptor classes to select a core collection with ShinyCore.
 
