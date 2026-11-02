@@ -112,6 +112,14 @@ core_by_cluster <- data.frame(cluster = as.integer(names(strata)), collection_n 
 save_table(core_by_cluster, "core_by_cluster")
 
 # ---- sensitivity of the ShinyCore selection to the class definition and the coverage targets -------
+x_unadj <- main$x
+for (tr in CONT) {
+  m_un <- as.numeric(tapply(dat[[tr]], factor(dat$no, levels = rownames(main$x)), mean, na.rm = TRUE)[rownames(main$x)])
+  m_un[is.nan(m_un)] <- NA; x_unadj[[tr]] <- m_un
+}
+sc_unadj <- shinycore(class_table(x_unadj))
+save_table(data.frame(no = sc_unadj$core, order = seq_along(sc_unadj$core), in_adjusted_core = sc_unadj$core %in% core_ids), "core_unadjusted_comparison")
+
 sens_core <- bind_rows(lapply(list(list(n = 3L, mx = CORE_COV_MAX, mn = CORE_COV_MIN), list(n = 5L, mx = CORE_COV_MAX, mn = CORE_COV_MIN), list(n = 7L, mx = CORE_COV_MAX, mn = CORE_COV_MIN),
                                    list(n = 5L, mx = 1.00, mn = 0.95), list(n = 5L, mx = 0.95, mn = 0.90)), function(z) {
   r <- shinycore(class_table(main$x, z$n), cov_max = z$mx, cov_min = z$mn); m <- coverage_metrics(r$core)
@@ -121,6 +129,29 @@ sens_core <- bind_rows(lapply(list(list(n = 3L, mx = CORE_COV_MAX, mn = CORE_COV
 }))
 save_table(sens_core, "core_sensitivity")
 
+# ---- leave-one-year-out (LOYO) stability of the core collection --------------------
+loyo_core <- bind_rows(lapply(sort(unique(dat$year)), function(yy) {
+  a <- profile_and_weights(dat[dat$year != yy, ])
+  r <- shinycore(class_table(a$x))
+  m <- coverage_metrics(r$core)
+  cr_train <- vapply(CONT, function(tr) {
+    v <- a$x[[tr]]; sv <- v[match(r$core, rownames(a$x))]
+    diff(range(sv, na.rm = TRUE)) / diff(range(v, na.rm = TRUE))
+  }, numeric(1))
+  data.frame(held_out_year = yy, n_train_accessions = nrow(a$x), core_size = length(r$core), N0 = r$N0, N1 = r$N1,
+             shared_with_primary = length(intersect(r$core, core_ids)),
+             shared_pct_of_primary = 100 * length(intersect(r$core, core_ids)) / length(core_ids),
+             shared_pct_of_loyo = 100 * length(intersect(r$core, core_ids)) / length(r$core),
+             train_class_coverage = r$CV * 100,
+             ref_class_coverage = m[["class_coverage"]],
+             modal_level_coverage = m[["modal_level_coverage"]],
+             train_range_coverage = 100 * mean(cr_train),
+             ref_range_coverage = m[["mean_range_coverage"]],
+             shannon = m[["shannon"]],
+             entry_nearest_entry = m[["entry_nearest_entry"]])
+}))
+save_table(loyo_core, "core_loyo_stability")
+
 write_json(list(n = N_CORE, N0 = sc$N0, N1 = sc$N1, cov_max = CORE_COV_MAX, cov_min = CORE_COV_MIN, n_classes = N_CLASSES, n_markers = sc$n_markers, n_classes_total = sc$n_classes,
                 CV = sc$CV, SH = sc$SH, RS = sc$RS, SH_collection = sc$SH_all, RS_collection = log10(sum(sc$score)),
                 metrics = as.list(observed), maximin_metrics = as.list(observed_maximin), by_cluster = core_by_cluster, allocation_maximin = as.list(allocation),
@@ -129,5 +160,6 @@ write_json(list(n = N_CORE, N0 = sc$N0, N1 = sc$N1, cov_max = CORE_COV_MAX, cov_
                 chi_cluster = list(statistic = unname(chi_core_cluster$statistic), p = chi_core_cluster$p.value),
                 core_by_years = as.list(table(years_by_id$n_years[years_by_id$no %in% core_ids])), n_double = sum(core$flower_type == "double"),
                 n_covering = sc$N0, n_thickening = N_CORE - sc$N0, shared_with_maximin = length(intersect(core_ids, maximin_ids)),
-                sensitivity = sens_core, coverage_history = sc$coverage_history),
+                unadjusted_core_size = length(sc_unadj$core), shared_with_unadjusted = length(intersect(core_ids, sc_unadj$core)),
+                sensitivity = sens_core, loyo_stability = loyo_core, coverage_history = sc$coverage_history),
            file.path(OUT, "core_summary.json"), auto_unbox = TRUE, pretty = TRUE, digits = 5)

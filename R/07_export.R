@@ -10,15 +10,19 @@ nums <- list(
   n_double = sum(petal_audit$flower_type == "double"),
   fixed_traits = FIXED_TRAITS, fixed_weights = as.list(FIXED_WEIGHTS),
   reproducibility = setNames(lapply(PRIMARY, function(tr) list(coefficient = rel$coefficient[rel$trait == tr], fixed = rel$fixed[rel$trait == tr], weight = unname(primary_w[tr]),
-    alpha = rel$alpha[rel$trait == tr], low = if (tr %in% ci$trait) ci$coef_low[ci$trait == tr] else NA, high = if (tr %in% ci$trait) ci$coef_high[ci$trait == tr] else NA,
+    alpha = rel$alpha[rel$trait == tr], latent_icc = rel$latent_icc[rel$trait == tr],
+    low = if (tr %in% ci$trait) ci$coef_low[ci$trait == tr] else NA, high = if (tr %in% ci$trait) ci$coef_high[ci$trait == tr] else NA,
+    zero_frequency = if (tr %in% ci$trait) ci$zero_frequency[ci$trait == tr] else NA,
     contribution_pct = weight_share$contribution_pct[weight_share$trait == tr], weight_share_pct = weight_share$weight_share_pct[weight_share$trait == tr])), PRIMARY),
   pair_cors = pair_cors,
+  quant_year_effects = quant_year_effects,
   ordinal_year_effects = year_shift,
   k = K, silhouette = base_run$sil, silhouette_scan = base_run$scan, cluster_sizes = as.integer(table(base_run$cl)),
   lingoes = base_run$correction, negative_fraction_pct = 100 * base_run$negative_fraction, pcoa_pct = pc_pct[1:2],
   cluster_profiles = profile_c, cluster_categorical = profile_cat, xtab = xtab, xtab_fruit = xtab_fruit, ari_two_way = ari_two_way, ari_cat = ari_cat,
+  ari_pam_ward = ari_pam_ward, ari_theo_ward = ari_theo_ward, ari_freqtie_ward = ari_freqtie_ward,
   chi_years = list(statistic = unname(chi_years$statistic), p = chi_years$p.value),
-  sensitivity = sens, validation = vs, core = cs, range_tab = range_tab, candidates = candidates,
+  sensitivity = sens, pairwise_ari = as.data.frame(pairwise_ari_mat), validation = vs, core = cs, range_tab = range_tab, candidates = candidates,
   no_disease_removed = EXCLUDE_TRAITS, excluded_accessions = EXCLUDE_ACCESSIONS)
 write_json(nums, file.path(OUT, "manuscript_numbers.json"), pretty = TRUE, auto_unbox = TRUE, na = "null", digits = 5)
 message("manuscript_numbers.json written")

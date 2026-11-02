@@ -18,7 +18,7 @@ rel <- main$reliability %>% filter(!fixed) %>% left_join(ci[, c("trait", "coef_l
 rel$label <- factor(rel$label, levels = rel$label[order(rel$panel, rel$coefficient)])
 f1 <- ggplot(rel, aes(x = coefficient, y = label, color = panel)) +
   geom_vline(xintercept = 0, color = "grey40") +
-  geom_errorbarh(aes(xmin = coef_low, xmax = coef_high), height = 0.25, color = "grey45") +
+  geom_errorbar(aes(xmin = coef_low, xmax = coef_high), orientation = "y", width = 0.25, color = "grey45") +
   geom_point(size = 3) + facet_grid(panel ~ ., scales = "free_y", space = "free_y") +
   scale_color_manual(values = c("#0072B2", "#D55E00"), guide = "none") +
   labs(x = "Between-year reproducibility", y = NULL) +
@@ -85,8 +85,14 @@ seg <- function(dd, x0 = 0) {   # recursive extraction of dendrogram segments wi
   walk(dd, 1); bind_rows(out)
 }
 segs <- seg(dend); segs$cl <- factor(segs$cl, levels = seq_len(K))
-f3 <- ggplot(segs) + geom_segment(aes(x = x, xend = xend, y = y, yend = yend, color = cl), linewidth = 0.35) +
+cl_spans <- data.frame(leaf_x = seq_along(ord), cl = factor(base_run$cl[hc$labels[ord]], levels = seq_len(K))) %>%
+  group_by(cl) %>% summarise(xmin = min(leaf_x), xmax = max(leaf_x), xmid = mean(range(leaf_x)), n = n(), .groups = "drop")
+f3 <- ggplot(segs) +
+  geom_segment(aes(x = x, xend = xend, y = y, yend = yend, color = cl), linewidth = 0.45) +
+  geom_segment(data = cl_spans, aes(x = xmin, xend = xmax, y = -0.06, yend = -0.06, color = cl), linewidth = 2.8, show.legend = FALSE) +
+  geom_text(data = cl_spans, aes(x = xmid, y = -0.17, label = sprintf("Cluster %s (n = %d)", cl, n), color = cl), size = 2.6, fontface = "bold", show.legend = FALSE) +
   scale_color_manual(values = CL_COL[seq_len(K)], na.value = "grey35", name = "Cluster", breaks = levels(segs$cl)) +
+  scale_y_continuous(expand = expansion(mult = c(0.10, 0.04))) +
   labs(x = NULL, y = "Ward merge height") + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), panel.grid = element_blank()) +
   guides(color = guide_legend(ncol = 1, position = "inside")) +
   legend_inside(0.98, 0.98, 1, 1) +
@@ -102,9 +108,10 @@ SCHEME_COL <- c(equal = "#E69F00", retained = "#56B4E9", weighted = "#0072B2")
 lo <- temporal %>% mutate(scheme = factor(scheme, levels = names(SCHEME_LAB), labels = SCHEME_LAB), held_out_year = factor(held_out_year))
 f4 <- ggplot(lo, aes(held_out_year, distance_spearman, fill = scheme)) +
   geom_col(position = position_dodge(width = 0.78), width = 0.7) +
-  geom_text(aes(label = sprintf("%.2f", distance_spearman)), position = position_dodge(width = 0.78), vjust = -0.35, size = 2.9) +
+  geom_errorbar(aes(ymin = rho_low, ymax = rho_high), position = position_dodge(width = 0.78), width = 0.22, linewidth = 0.35, color = "grey25") +
+  geom_text(aes(y = rho_high, label = sprintf("%.2f", distance_spearman)), position = position_dodge(width = 0.78), vjust = -0.35, size = 2.8) +
   scale_fill_manual(values = unname(SCHEME_COL), name = NULL) +
-  scale_y_continuous(limits = c(0, 0.8), breaks = seq(0, 0.8, 0.2), expand = expansion(mult = c(0, 0.02))) +
+  scale_y_continuous(limits = c(0, 0.85), breaks = seq(0, 0.8, 0.2), expand = expansion(mult = c(0, 0.02))) +
   labs(x = "Held-out year (LOYO)", y = "Spearman \u03c1 (training vs. held-out distances)") +
   legend_inside(0.02, 0.98, 0, 1) +
   theme(

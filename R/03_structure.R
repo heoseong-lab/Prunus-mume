@@ -1,17 +1,29 @@
 # =============================================================================
 # 03_structure.R  Weighted Gower distance, ordination, clustering, sensitivity
 # =============================================================================
-euclideanize <- function(D) {          # Lingoes correction when sqrt(Gower) is not Euclidean
+euclideanize <- function(D) {          # additive constant (sqrt(D^2 + 2c)) when sqrt(Gower) is not Euclidean
   D <- as.matrix(D); n <- nrow(D); H <- diag(n) - matrix(1 / n, n, n)
   ev <- eigen(-.5 * H %*% (D^2) %*% H, symmetric = TRUE, only.values = TRUE)$values
   cadd <- max(0, -min(ev)); if (cadd < 1e-10) cadd <- 0
   Dc <- sqrt(pmax(D^2 + 2 * cadd, 0)); diag(Dc) <- 0; dimnames(Dc) <- dimnames(D)
   list(distance = as.dist(Dc), constant = cadd, negative_fraction = abs(sum(ev[ev < -1e-10])) / sum(ev[ev > 0]))
 }
-make_distance <- function(x, w) {
+make_distance <- function(x, w, theo_ord = FALSE) {
   cols <- intersect(names(w), names(x)); w <- w[cols]; keep <- is.finite(w) & w > 0
   stopifnot(any(keep)); x <- x[, cols[keep], drop = FALSE]; w <- w[keep]
-  d <- suppressWarnings(daisy(x, metric = "gower", weights = unname(w)))
+  if (!theo_ord) {
+    d <- suppressWarnings(daisy(x, metric = "gower", weights = unname(w)))
+  } else {
+    n <- nrow(x); num <- matrix(0, n, n); den <- matrix(0, n, n)
+    for (tr in colnames(x)) {
+      v <- x[[tr]]; ok <- outer(!is.na(v), !is.na(v), "&")
+      if (is.factor(v)) dj <- outer(as.character(v), as.character(v), "!=") * 1
+      else if (tr %in% ORD) dj <- abs(outer(v, v, "-")) / ORD_RANGE
+      else { ran <- diff(range(v, na.rm = TRUE)); dj <- if (ran > 0) abs(outer(v, v, "-")) / ran else matrix(0, n, n) }
+      dj[!ok] <- 0; num <- num + w[[tr]] * dj; den <- den + w[[tr]] * ok
+    }
+    rownames(num) <- colnames(num) <- rownames(x); d <- as.dist(num / pmax(den, 1e-15))
+  }
   if (any(!is.finite(d))) stop("No comparable positive-weight components in at least one accession pair")
   out <- euclideanize(sqrt(as.matrix(d))); out$gower <- d; out
 }
@@ -35,6 +47,16 @@ save_table(cluster_tab, "cluster_assignments")
 # ---- sensitivity configurations ------------------------------------------------
 equal_w <- setNames(as.numeric(!(PRIMARY %in% FIXED_TRAITS)), PRIMARY)   # equal weights for the measured variables
 rel_by  <- function(col) setNames(main$reliability[[col]], main$reliability$trait)
+x_clmm  <- main$x
+for (tr in ORD) {
+  a <- dat[!is.na(dat[[tr]]), ]; a$y <- ordered(a[[tr]], levels = LEV[[tr]]); a$no_f <- factor(a$no); a$year_f <- factor(a$year)
+  fit <- try(suppressWarnings(ordinal::clmm(y ~ year_f + (1 | no_f), data = a, Hess = FALSE)), silent = TRUE)
+  if (!inherits(fit, "try-error")) { re <- ordinal::ranef(fit)$no_f[, 1]; names(re) <- rownames(ordinal::ranef(fit)$no_f); x_clmm[[tr]] <- as.numeric(re[rownames(x_clmm)]) }
+}
+w_strict_ci <- primary_w; w_strict_ci[boot_ci$trait[boot_ci$coef_low <= 0]] <- 0
+w_no_ssc    <- primary_w; w_no_ssc["soluble_solids_content"] <- 0
+w_two_var   <- setNames(rep(0, length(PRIMARY)), PRIMARY); w_two_var[c("petal_number", "leaf_base_shape")] <- primary_w[c("petal_number", "leaf_base_shape")]
+
 configs <- list(
   Primary            = list(x = main$x, w = primary_w),
   Equal_all          = list(x = main$x, w = equal_w),
@@ -45,6 +67,10 @@ for (nyr in c(2, 3)) {
   ids <- years_by_id$no[years_by_id$n_years >= nyr]; a <- profile_and_weights(dat[dat$no %in% ids, ])
   configs[[paste0("Min_", nyr, "_years")]] <- list(x = a$x, w = a$weights[PRIMARY])
 }
+configs$Strict_CI_positive <- list(x = main$x, w = w_strict_ci)
+configs$Exclude_SSC        <- list(x = main$x, w = w_no_ssc)
+configs$CLMM_ordinal       <- list(x = x_clmm, w = primary_w)
+configs$Two_variables_only <- list(x = main$x, w = w_two_var)
 
 runs <- lapply(configs, function(z) cluster_run(z$x, z$w))
 sens <- bind_rows(lapply(names(runs), function(nm) {
@@ -56,6 +82,25 @@ sens <- bind_rows(lapply(names(runs), function(nm) {
 }))
 save_table(sens, "sensitivity_configurations")
 save_table(bind_rows(lapply(names(configs), function(nm) data.frame(configuration = nm, trait = names(configs[[nm]]$w), weight = unname(configs[[nm]]$w)))), "weights_by_configuration")
+
+# Pairwise ARIs among configurations at k = 4
+nms_cfg <- names(runs)
+pairwise_ari_mat <- matrix(NA_real_, length(nms_cfg), length(nms_cfg), dimnames = list(nms_cfg, nms_cfg))
+for (i in seq_along(nms_cfg)) for (j in seq_along(nms_cfg)) {
+  c1 <- cutree(runs[[nms_cfg[i]]]$hc, K); names(c1) <- rownames(configs[[nms_cfg[i]]]$x)
+  c2 <- cutree(runs[[nms_cfg[j]]]$hc, K); names(c2) <- rownames(configs[[nms_cfg[j]]]$x)
+  sh <- intersect(names(c1), names(c2)); pairwise_ari_mat[i, j] <- ari(c1[sh], c2[sh])
+}
+save_table(as.data.frame(pairwise_ari_mat) %>% mutate(configuration = rownames(.), .before = 1), "pairwise_configuration_aris")
+
+# PAM clustering on raw weighted Gower dissimilarity and theoretical ordinal range check
+pam_k4 <- pam(base_run$gower, k = K, diss = TRUE)
+ari_pam_ward <- ari(base_run$cl, pam_k4$clustering[names(base_run$cl)])
+dis_theo <- make_distance(main$x, primary_w, theo_ord = TRUE)
+ari_theo_ward <- ari(base_run$cl, cutree(hclust(dis_theo$distance, method = "ward.D2"), K))
+x_freqtie <- main$x
+for (tr in NOM) { gt <- table(dat[[tr]]); x_freqtie[[tr]] <- factor(vapply(rownames(main$x), function(i) mode_freq(dat[[tr]][dat$no == i], gt), character(1)), levels = levels(main$x[[tr]])) }
+ari_freqtie_ward <- ari(base_run$cl, cutree(cluster_run(x_freqtie, primary_w, k = K)$hc, K))
 
 # ---- descriptive profiles of the clusters ------------------------------------
 profile_c <- bind_rows(lapply(CONT, function(tr) data.frame(no = rownames(main$x), value = main$x[[tr]]) %>%

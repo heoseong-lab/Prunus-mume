@@ -60,6 +60,13 @@ save_table(dat %>% select(no, year, all_of(CONT)) %>% pivot_longer(-c(no, year),
   group_by(trait, year) %>% summarise(n = sum(is.finite(value)), mean = mean(value, na.rm = TRUE), sd = sd(value, na.rm = TRUE),
                                       minimum = min(value, na.rm = TRUE), maximum = max(value, na.rm = TRUE), .groups = "drop"),
   "annual_continuous_summary")
+quant_year_effects <- bind_rows(lapply(CONT, function(tr) {
+  a <- summary(aov(dat[[tr]] ~ factor(dat$year)))[[1]]
+  kw <- kruskal.test(dat[[tr]] ~ factor(dat$year))
+  data.frame(trait = tr, F_value = a[1, "F value"], F_p = a[1, "Pr(>F)"], eta_sq = a[1, "Sum Sq"] / sum(a[, "Sum Sq"]),
+             KW_chisq = unname(kw$statistic), KW_p = kw$p.value)
+}))
+save_table(quant_year_effects, "quantitative_year_effects")
 # harvest batches with their medians (shows the size of the stage-1 adjustment)
 save_table(dat %>% filter(!is.na(batch)) %>% group_by(year, batch, harvest_date = as.character(harvest_date)) %>%
   summarise(n_accessions = n(), fruit_weight_median = median(fruit_weight, na.rm = TRUE),

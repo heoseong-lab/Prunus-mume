@@ -123,8 +123,15 @@ DOUBLE_MIN <- 10   # mean petal number at or above which an accession is called 
 
 # ---- small helpers ----------------------------------------------------------
 mode_value <- function(x) { x <- x[!is.na(x)]; if (!length(x)) return(NA_character_); tb <- table(x); sort(names(tb)[tb == max(tb)])[1] }
+mode_freq  <- function(x, gtab) {
+  x <- x[!is.na(x)]; if (!length(x)) return(NA_character_)
+  tb <- table(x); mx <- names(tb)[tb == max(tb)]
+  if (length(mx) == 1) return(mx)
+  mx[order(-as.numeric(gtab[mx]), mx)][1]
+}
 mode_tie   <- function(x) { tb <- table(x); length(tb) > 1 && sum(tb == max(tb)) > 1 }
 ord_score  <- function(v, tr) 1 + 8 * (match(v, LEV[[tr]]) - 1) / (length(LEV[[tr]]) - 1)   # equally spaced 1-9
+ORD_RANGE  <- 8.0   # theoretical range of 1-9 ordinal scores
 q95 <- function(x) quantile(x, c(.025, .5, .975), na.rm = TRUE, names = FALSE)
 
 # Adjusted Rand index (Hubert & Arabie 1985)

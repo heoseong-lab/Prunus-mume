@@ -42,13 +42,15 @@ profile_and_weights <- function(d, latent = FALSE) {
   list(x = x, weights = setNames(rel$weight, rel$trait), reliability = rel)
 }
 
-main <- profile_and_weights(dat)
+main <- profile_and_weights(dat, latent = TRUE)
 pair_cors <- bind_rows(lapply(CONT, function(tr) year_pair_cor(dat, tr, paste0(tr, "_adj"))))
 save_table(pair_cors, "between_year_correlations")
 save_table(main$reliability, "trait_reproducibility")
 save_table(data.frame(no = rownames(main$x), main$x, check.names = FALSE), "accession_profiles")
-save_table(bind_rows(lapply(CAT, function(tr) data.frame(trait = tr, no = unique(dat$no),
-  mode_tied = vapply(unique(dat$no), function(i) mode_tie(dat[[tr]][dat$no == i]), logical(1))))), "categorical_mode_ties")
+ties_tab <- bind_rows(lapply(CAT, function(tr) data.frame(trait = tr, no = unique(dat$no),
+  mode_tied = vapply(unique(dat$no), function(i) mode_tie(dat[[tr]][dat$no == i]), logical(1)))))
+save_table(ties_tab, "categorical_mode_ties")
+save_table(ties_tab %>% group_by(trait) %>% summarise(n_tied = sum(mode_tied), .groups = "drop"), "categorical_mode_ties_summary")
 
 # Bootstrap intervals for the reproducibility coefficients: accessions are drawn with replacement together
 # with all their records (duplicates renamed so that each draw is a separate accession), and the between-year
@@ -82,5 +84,5 @@ year_shift <- bind_rows(lapply(ORD, function(tr) {
 })) %>% mutate(year_BH_p = p.adjust(year_LR_p, "BH"))
 save_table(year_shift, "ordinal_year_effects")
 
-print(main$reliability[, c("trait", "type", "fixed", "n_accessions", "coefficient", "alpha", "weight")] %>%
-        left_join(boot_ci[, c("trait", "coef_low", "coef_high")], by = "trait"), digits = 3)
+print(main$reliability[, c("trait", "type", "fixed", "n_accessions", "coefficient", "alpha", "latent_icc", "weight")] %>%
+        left_join(boot_ci[, c("trait", "coef_low", "coef_high", "zero_frequency")], by = "trait"), digits = 3)
